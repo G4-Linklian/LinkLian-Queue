@@ -3,11 +3,11 @@ package handlers
 import (
 	"database/sql"
 	// "fmt"
+	// "github.com/gorilla/websocket"
 	"log"
 	"worker/models"
 	"worker/utils"
-
-	"github.com/lib/pq"
+	// "github.com/lib/pq"
 )
 
 type EventHandler struct {
@@ -22,20 +22,9 @@ func (h *EventHandler) ProcessEvent(event models.SocketEvent) error {
 	utils.LogInfof("Processing Event Type: %s", event.Type)
 
 	switch event.Type {
-	case "CHAT_SEND":
-		utils.LogInfo("State: Extracting payload data for CHAT_SEND")
+	case "CHAT_DELIVER":
 
-		// chatIdPtr := utils.GetIntPointer(event.Payload, "chat_id")
-		// senderIdPtr := utils.GetIntPointer(event.Payload, "sender_id")
-		// replyIdPtr := utils.GetIntPointer(event.Payload, "reply_id")
-
-		// if chatIdPtr == nil || senderIdPtr == nil {
-		// 	utils.LogErrorf("State: Validation Failed - missing chat_id or sender_id. Payload: %v", event.Payload)
-		// 	return fmt.Errorf("missing chat_id or sender_id")
-		// }
-
-		// content, _ := event.Payload["content"].(string)
-		// fileList := utils.GetStringArray(event.Payload, "file_url")
+		utils.LogInfo("Worker: Emitting CHAT_DELIVER to socket server")
 
 		chatId := event.Payload["chat_id"]
 		senderId := event.Payload["sender_id"]
@@ -43,25 +32,16 @@ func (h *EventHandler) ProcessEvent(event models.SocketEvent) error {
 		content, _ := event.Payload["content"].(string)
 		fileList := utils.GetStringArray(event.Payload, "file_url")
 
-		utils.LogInfof("State: Preparing to insert message. ChatID: %v, SenderID: %v, ContentLen: %d", chatId, senderId, len(content))
-
-		query := `
-			INSERT INTO message (chat_id, sender_id, content, reply_id, file, created_at, flag_valid) 
-			VALUES ($1, $2, $3, $4, $5, NOW(), $6)
-		`
-
-		utils.LogInfo("State: Executing database insert")
-		_, err := h.DB.Exec(query,
-			chatId,
-			senderId,
-			content,
-			replyId,
-			pq.Array(fileList),
-			true,
-		)
+		err := utils.EmitToSocket("CHAT_DELIVER", map[string]interface{}{
+			"chat_id":   chatId,
+			"sender_id": senderId,
+			"content":   content,
+			"reply_id":  replyId,
+			"file_url":  fileList,
+		})
 
 		if err != nil {
-			utils.LogErrorf("State: Database Insert Error: %v", err)
+			utils.LogErrorf("Emit socket error: %v", err)
 			return err
 		}
 

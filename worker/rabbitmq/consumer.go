@@ -7,7 +7,6 @@ import (
 	"time"
 	"worker/handlers"
 	"worker/models"
-	"worker/utils"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -78,8 +77,6 @@ func InitConsumer(handler *handlers.EventHandler) {
 				continue
 			}
 
-
-			utils.LogInfof("Processing Event Type: %s", event.Type)
 			err = handler.ProcessEvent(event)
 			if err != nil {
 				log.Printf("Error inserting to DB: %s", err)

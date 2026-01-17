@@ -33,3 +33,5 @@ services:
       - PG_DATABASE=${PG_DATABASE}
       # - PG_SSLMODE=${PG_SSLMODE}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/
+
+      - SOCKET_SERVER_URL=${SOCKET_SERVER_URL}
