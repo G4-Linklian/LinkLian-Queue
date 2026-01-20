@@ -38,6 +38,7 @@ func (h *EventHandler) ProcessEvent(event models.SocketEvent) error {
 			"content":   content,
 			"reply_id":  replyId,
 			"file_url":  fileList,
+			"created_at": event.Payload["created_at"],
 		})
 
 		if err != nil {
