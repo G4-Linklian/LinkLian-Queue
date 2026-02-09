@@ -7,7 +7,7 @@ on:
       - "worker/**/*.go"
       - "worker/go.mod"
       - "worker/go.sum"
-      - "worker/go-ci.sh"
+      - "worker/go-ci.sh"          #Rerun CI when .sh updated
       - "worker/Dockerfile"
       - "worker/**"
       - "docker-compose.yml"
@@ -24,7 +24,7 @@ on:
       - "worker/**/*.go"
       - "worker/go.mod"
       - "worker/go.sum"
-      - "worker/go-ci.sh"
+      - "worker/go-ci.sh"          #Rerun CI when .sh updated
       - "worker/Dockerfile"
       - "worker/**"
       - "docker-compose.yml"
@@ -43,28 +43,80 @@ concurrency:
 
 permissions:
   contents: read
+  security-events: write # needed for SARIF upload (gosec)
 
 jobs:
   ci:
-    name: Go CI (linux)
+    name: Go CI + Security (linux)
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ---------- Secret scan ----------
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --redact --no-git
+
+      # ---------- Go setup ----------
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version-file: worker/go.mod
           cache: true
 
-      - name: Make script executable
+      # ---------- SAST (gosec) ----------
+      - name: SAST (gosec) -> SARIF
         working-directory: worker
-        run: chmod +x ./go-ci.sh
-
-      - name: Run Go CI (unit only)
-        working-directory: worker
-        shell: bash
         run: |
-          ./go-ci.sh unit
+          set -euo pipefail
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          "$HOME/go/bin/gosec" -fmt=sarif -out gosec.sarif ./...
+
+      - name: Upload SAST report (SARIF)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: worker/gosec.sarif
+
+      # ---------- Go CI (unit only) ----------
+      - name: Go fmt check
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          files="$(gofmt -l . || true)"
+          if [[ -n "$files" ]]; then
+            echo "Files not formatted:"
+            echo "$files"
+            echo "Fix with: gofmt -w ."
+            exit 1
+          fi
+
+      - name: Go vet
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          go vet ./...
+
+      - name: Go mod download
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          go mod download
+
+      - name: Go build
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          go build -v ./...
+
+      - name: Unit tests
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          go test -v ./... -count=1
