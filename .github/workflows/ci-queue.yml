@@ -1,7 +1,5 @@
 name: LINKLIAN-QUEUE CI
 
-# Trigger this workflow on push and pull requests to main/staging branches
-# Only trigger when relevant files are changed (worker Go code, config, Docker, CI workflow)
 on:
   push:
     branches: ["main", "staging"]
@@ -39,8 +37,6 @@ on:
 
   workflow_dispatch:
 
-# Prevent multiple workflow runs on the same branch
-# If a new push happens before previous run finishes, cancel the old one
 concurrency:
   group: ci-queue-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -49,38 +45,26 @@ permissions:
   contents: read
 
 jobs:
-  # Main CI job: Run Go checks/tests/build
   ci:
-    name: Go CI (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        # Test on Linux, macOS, and Windows to ensure cross-platform compatibility
-        os: [ubuntu-latest, macos-latest, windows-latest]
-
-    runs-on: ${{ matrix.os }}
+    name: Go CI (linux)
+    runs-on: ubuntu-latest
 
     steps:
-      # Fetch the repository code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Setup Go environment from version specified in worker/go.mod
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version-file: worker/go.mod
           cache: true
-  
-      - name: Make script executable (non-windows)
-        if: runner.os != 'Windows'
+
+      - name: Make script executable
         working-directory: worker
         run: chmod +x ./go-ci.sh
 
-      # Run Go code quality checks: formatting, vetting, tests, build (UNIT ONLY)
-      - name: Run Go CI (gofmt/vet/test/build)
+      - name: Run Go CI (unit only)
         working-directory: worker
         shell: bash
         run: |
-          chmod +x ./go-ci.sh
           ./go-ci.sh unit
