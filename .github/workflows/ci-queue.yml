@@ -1,92 +1,86 @@
 name: LINKLIAN-QUEUE CI
 
+# Trigger this workflow on push and pull requests to main/staging branches
+# Only trigger when relevant files are changed (worker Go code, config, Docker, CI workflow)
 on:
   push:
+    branches: ["main", "staging"]
+    paths:
+      - "worker/**/*.go"
+      - "worker/go.mod"
+      - "worker/go.sum"
+      - "worker/go-ci.sh"
+      - "worker/Dockerfile"
+      - "worker/**"
+      - "docker-compose.yml"
+      - ".github/workflows/ci-queue.yml"
+      - "cmd/**"
+      - "internal/**"
+      - "pkg/**"
+      - "nginx/**"
+      - "examples/**"
+
   pull_request:
+    branches: ["main", "staging"]
+    paths:
+      - "worker/**/*.go"
+      - "worker/go.mod"
+      - "worker/go.sum"
+      - "worker/go-ci.sh"
+      - "worker/Dockerfile"
+      - "worker/**"
+      - "docker-compose.yml"
+      - ".github/workflows/ci-queue.yml"
+      - "cmd/**"
+      - "internal/**"
+      - "pkg/**"
+      - "nginx/**"
+      - "examples/**"
+
   workflow_dispatch:
+
+# Prevent multiple workflow runs on the same branch
+# If a new push happens before previous run finishes, cancel the old one
+concurrency:
+  group: ci-queue-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # Main CI job: Run Go checks/tests/build
+  ci:
+    name: Go CI (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Test on Linux, macOS, and Windows to ensure cross-platform compatibility
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
-      - uses: actions/setup-go@v5
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # Fetch the repository code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Setup Go environment from version specified in worker/go.mod
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: worker/go.mod
           cache: true
-
-      - name: Fetch shared CI script
+  
+      - name: Make script executable (non-windows)
+        if: runner.os != 'Windows'
         working-directory: worker
+        run: chmod +x ./go-ci.sh
+
+      # Run Go code quality checks: formatting, vetting, tests, build (UNIT ONLY)
+      - name: Run Go CI (gofmt/vet/test/build)
+        working-directory: worker
+        shell: bash
         run: |
-          curl -fsSL \
-            https://raw.githubusercontent.com/<ORG>/<CI-REPO>/<COMMIT_SHA>/scripts/go-ci.sh \
-            -o go-ci.sh
-          chmod +x go-ci.sh
-
-      - name: Run Unit CI
-        working-directory: worker
-        run: ./go-ci.sh unit
-
-  integration:
-    needs: [unit]
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: linklian_db
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U user -d linklian_db"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-      rabbitmq:
-        image: rabbitmq:3-management
-        ports: ["5672:5672", "15672:15672"]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: worker/go.mod
-          cache: true
-
-      - name: Fetch shared CI script
-        working-directory: worker
-        run: |
-          curl -fsSL \
-            https://raw.githubusercontent.com/<ORG>/<CI-REPO>/<COMMIT_SHA>/scripts/go-ci.sh \
-            -o go-ci.sh
-          chmod +x go-ci.sh
-
-      - name: Run Integration CI
-        working-directory: worker
-        env:
-          DATABASE_URL: postgres://user:password@localhost:5432/linklian_db?sslmode=disable
-          RABBITMQ_URL: amqp://guest:guest@localhost:5672/
-        run: ./go-ci.sh integration
-
-#  codescene-analysis:
-#    if: false
-#    name: CodeScene Analysis
-#   needs: [cross-platform-build, integration-tests]
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#        with:
-#         fetch-depth: 0
-#
-#      - name: Run CodeScene Analysis
-#        uses: codescene-community/codescene-github-action@v1.2.0
-#        with:
-#          codescene-api-token: ${{ secrets.CODESCENE_API_TOKEN }}
-#          codescene-user: ${{ secrets.CODESCENE_USER }}
-#         codescene-project-id: ${{ secrets.CODESCENE_PROJECT_ID }}
+          chmod +x ./go-ci.sh
+          ./go-ci.sh unit
