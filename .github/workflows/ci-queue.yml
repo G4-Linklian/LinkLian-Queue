@@ -43,11 +43,11 @@ concurrency:
 
 permissions:
   contents: read
-  security-events: write # needed for SARIF upload (gosec)
+  security-events: write   # required for SARIF upload (gosec)
 
 jobs:
   ci:
-    name: Go CI + Security (linux)
+    name: Go CI + Security (queue)
     runs-on: ubuntu-latest
 
     defaults:
@@ -71,7 +71,15 @@ jobs:
           go-version-file: worker/go.mod
           cache: true
 
-      # ---------- SAST (gosec) ----------
+      # ---------- SCA (dependency vulnerabilities) ----------
+      - name: SCA (govulncheck)
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$HOME/go/bin/govulncheck" ./...
+
+      # ---------- SAST (code vulnerabilities) ----------
       - name: SAST (gosec) -> SARIF
         working-directory: worker
         run: |
@@ -84,7 +92,7 @@ jobs:
         with:
           sarif_file: worker/gosec.sarif
 
-      # ---------- Go CI (unit only) ----------
+      # ---------- Go CI (standalone) ----------
       - name: Go fmt check
         working-directory: worker
         run: |
