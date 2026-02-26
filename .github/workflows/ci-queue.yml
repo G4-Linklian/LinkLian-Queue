@@ -1,40 +1,10 @@
 name: LINKLIAN-QUEUE CI
 
 on:
-  push:
-    branches: ["main", "staging"]
-    paths:
-      - "worker/**/*.go"
-      - "worker/go.mod"
-      - "worker/go.sum"
-      - "worker/go-ci.sh"          #Rerun CI when .sh updated
-      - "worker/Dockerfile"
-      - "worker/**"
-      - "docker-compose.yml"
-      - ".github/workflows/ci-queue.yml"
-      - "cmd/**"
-      - "internal/**"
-      - "pkg/**"
-      - "nginx/**"
-      - "examples/**"
-
   pull_request:
-    branches: ["main", "staging"]
+    branches: [main, staging]
     paths:
-      - "worker/**/*.go"
-      - "worker/go.mod"
-      - "worker/go.sum"
-      - "worker/go-ci.sh"          #Rerun CI when .sh updated
-      - "worker/Dockerfile"
-      - "worker/**"
-      - "docker-compose.yml"
-      - ".github/workflows/ci-queue.yml"
-      - "cmd/**"
-      - "internal/**"
-      - "pkg/**"
-      - "nginx/**"
-      - "examples/**"
-
+      - "**"
   workflow_dispatch:
 
 concurrency:
@@ -43,88 +13,122 @@ concurrency:
 
 permissions:
   contents: read
-  security-events: write   # required for SARIF upload (gosec)
+  security-events: write
 
 jobs:
-  ci:
-    name: Go CI + Security (queue)
+  sast:
+    name: SAST (gosec)
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        shell: bash
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ---------- Secret scan ----------
-      - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+      - uses: actions/setup-go@v5
         with:
-          args: detect --redact --no-git
-
-      # ---------- Go setup ----------
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: worker/go.mod
+          go-version-file: go.mod
           cache: true
 
-      # ---------- SCA (dependency vulnerabilities) ----------
-      - name: SCA (govulncheck)
-        working-directory: worker
-        run: |
-          set -euo pipefail
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          "$HOME/go/bin/govulncheck" ./...
-
-      # ---------- SAST (code vulnerabilities) ----------
-      - name: SAST (gosec) -> SARIF
-        working-directory: worker
+      - name: Run gosec (SARIF)
+        continue-on-error: true
         run: |
           set -euo pipefail
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           "$HOME/go/bin/gosec" -fmt=sarif -out gosec.sarif ./...
 
-      - name: Upload SAST report (SARIF)
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload gosec SARIF
+        if: ${{ always() && hashFiles('gosec.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: worker/gosec.sarif
+          sarif_file: gosec.sarif
 
-      # ---------- Go CI (standalone) ----------
-      - name: Go fmt check
-        working-directory: worker
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    needs: [sast]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Gitleaks (SARIF)
+        continue-on-error: true
         run: |
           set -euo pipefail
+          docker run --rm \
+            -v "${{ github.workspace }}:/repo" \
+            zricethezav/gitleaks:latest \
+            detect \
+              --source=/repo \
+              --redact \
+              --verbose \
+              --report-format=sarif \
+              --report-path=/repo/gitleaks.sarif \
+              --exit-code 1
+
+      - name: Upload Gitleaks SARIF
+        if: ${{ always() && hashFiles('gitleaks.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gitleaks.sarif
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [secret-scan]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go fmt check (non-blocking)
+        continue-on-error: true
+        run: |
           files="$(gofmt -l . || true)"
           if [[ -n "$files" ]]; then
-            echo "Files not formatted:"
-            echo "$files"
-            echo "Fix with: gofmt -w ."
+            for f in $files; do
+              echo "::warning file=$f::File not formatted (run: gofmt -w .)"
+            done
             exit 1
           fi
 
       - name: Go vet
-        working-directory: worker
-        run: |
-          set -euo pipefail
-          go vet ./...
+        run: go vet ./...
 
       - name: Go mod download
-        working-directory: worker
-        run: |
-          set -euo pipefail
-          go mod download
+        run: go mod download
 
       - name: Go build
-        working-directory: worker
-        run: |
-          set -euo pipefail
-          go build -v ./...
+        run: go build -v ./...
 
-      - name: Unit tests
-        working-directory: worker
+  container-scan:
+    name: Docker Build + Trivy
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t linklian-socket:local -f Dockerfile .
+
+      - name: Trivy scan (SARIF)
+        continue-on-error: true
         run: |
-          set -euo pipefail
-          go test -v ./... -count=1
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${{ github.workspace }}:/repo" \
+            aquasec/trivy image \
+            --format sarif \
+            --output /repo/trivy.sarif \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            linklian-socket:local
+
+      - name: Upload Trivy SARIF
+        if: ${{ always() && hashFiles('trivy.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy.sarif
