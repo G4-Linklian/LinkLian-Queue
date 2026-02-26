@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-queue-${{ github.workflow }}-${{ github.ref }}
+  group: ci-socket-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -23,23 +23,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Detect go.mod
+        id: gomod
+        run: |
+          set -euo pipefail
+          path="$(git ls-files '**/go.mod' | head -n 1 || true)"
+          if [[ -z "$path" ]]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "dir=$(dirname "$path")" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        if: ${{ steps.gomod.outputs.found == 'true' }}
+        uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: ${{ steps.gomod.outputs.path }}
           cache: true
+          cache-dependency-path: ${{ steps.gomod.outputs.dir }}/go.sum
 
       - name: Run gosec (SARIF)
+        if: ${{ steps.gomod.outputs.found == 'true' }}
         continue-on-error: true
+        working-directory: ${{ steps.gomod.outputs.dir }}
         run: |
           set -euo pipefail
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          "$HOME/go/bin/gosec" -fmt=sarif -out gosec.sarif ./...
+          "$HOME/go/bin/gosec" -fmt=sarif -out "$GITHUB_WORKSPACE/gosec.sarif" ./...
 
       - name: Upload gosec SARIF
         if: ${{ always() && hashFiles('gosec.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: gosec.sarif
+
+      - name: No go.mod found
+        if: ${{ steps.gomod.outputs.found != 'true' }}
+        run: echo "::warning::No go.mod found in repository. Skipping gosec."
 
   secret-scan:
     name: Secret Scan (gitleaks)
@@ -78,13 +100,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Detect go.mod
+        id: gomod
+        run: |
+          set -euo pipefail
+          path="$(git ls-files '**/go.mod' | head -n 1 || true)"
+          if [[ -z "$path" ]]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "dir=$(dirname "$path")" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        if: ${{ steps.gomod.outputs.found == 'true' }}
+        uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: ${{ steps.gomod.outputs.path }}
           cache: true
+          cache-dependency-path: ${{ steps.gomod.outputs.dir }}/go.sum
 
       - name: Go fmt check (non-blocking)
+        if: ${{ steps.gomod.outputs.found == 'true' }}
         continue-on-error: true
+        working-directory: ${{ steps.gomod.outputs.dir }}
         run: |
           files="$(gofmt -l . || true)"
           if [[ -n "$files" ]]; then
@@ -95,13 +135,23 @@ jobs:
           fi
 
       - name: Go vet
+        if: ${{ steps.gomod.outputs.found == 'true' }}
+        working-directory: ${{ steps.gomod.outputs.dir }}
         run: go vet ./...
 
       - name: Go mod download
+        if: ${{ steps.gomod.outputs.found == 'true' }}
+        working-directory: ${{ steps.gomod.outputs.dir }}
         run: go mod download
 
       - name: Go build
+        if: ${{ steps.gomod.outputs.found == 'true' }}
+        working-directory: ${{ steps.gomod.outputs.dir }}
         run: go build -v ./...
+
+      - name: No go.mod found
+        if: ${{ steps.gomod.outputs.found != 'true' }}
+        run: echo "::warning::No go.mod found in repository. Skipping Go build."
 
   container-scan:
     name: Docker Build + Trivy
