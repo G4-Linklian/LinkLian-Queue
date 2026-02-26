@@ -23,31 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect go.mod
-        id: gomod
-        run: |
-          set -euo pipefail
-          path="$(git ls-files '**/go.mod' | head -n 1 || true)"
-          if [[ -z "$path" ]]; then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "found=true" >> "$GITHUB_OUTPUT"
-          echo "path=$path" >> "$GITHUB_OUTPUT"
-          echo "dir=$(dirname "$path")" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Go
-        if: ${{ steps.gomod.outputs.found == 'true' }}
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version-file: ${{ steps.gomod.outputs.path }}
+          go-version-file: worker/go.mod
           cache: true
-          cache-dependency-path: ${{ steps.gomod.outputs.dir }}/go.sum
+          cache-dependency-path: worker/go.sum
 
       - name: Run gosec (SARIF)
-        if: ${{ steps.gomod.outputs.found == 'true' }}
         continue-on-error: true
-        working-directory: ${{ steps.gomod.outputs.dir }}
+        working-directory: worker
         run: |
           set -euo pipefail
           go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -58,10 +42,6 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: gosec.sarif
-
-      - name: No go.mod found
-        if: ${{ steps.gomod.outputs.found != 'true' }}
-        run: echo "::warning::No go.mod found in repository. Skipping gosec."
 
   secret-scan:
     name: Secret Scan (gitleaks)
@@ -100,31 +80,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect go.mod
-        id: gomod
-        run: |
-          set -euo pipefail
-          path="$(git ls-files '**/go.mod' | head -n 1 || true)"
-          if [[ -z "$path" ]]; then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "found=true" >> "$GITHUB_OUTPUT"
-          echo "path=$path" >> "$GITHUB_OUTPUT"
-          echo "dir=$(dirname "$path")" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Go
-        if: ${{ steps.gomod.outputs.found == 'true' }}
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version-file: ${{ steps.gomod.outputs.path }}
+          go-version-file: worker/go.mod
           cache: true
-          cache-dependency-path: ${{ steps.gomod.outputs.dir }}/go.sum
+          cache-dependency-path: worker/go.sum
 
       - name: Go fmt check (non-blocking)
-        if: ${{ steps.gomod.outputs.found == 'true' }}
         continue-on-error: true
-        working-directory: ${{ steps.gomod.outputs.dir }}
+        working-directory: worker
         run: |
           files="$(gofmt -l . || true)"
           if [[ -n "$files" ]]; then
@@ -135,23 +99,16 @@ jobs:
           fi
 
       - name: Go vet
-        if: ${{ steps.gomod.outputs.found == 'true' }}
-        working-directory: ${{ steps.gomod.outputs.dir }}
+        working-directory: worker
         run: go vet ./...
 
       - name: Go mod download
-        if: ${{ steps.gomod.outputs.found == 'true' }}
-        working-directory: ${{ steps.gomod.outputs.dir }}
+        working-directory: worker
         run: go mod download
 
       - name: Go build
-        if: ${{ steps.gomod.outputs.found == 'true' }}
-        working-directory: ${{ steps.gomod.outputs.dir }}
+        working-directory: worker
         run: go build -v ./...
-
-      - name: No go.mod found
-        if: ${{ steps.gomod.outputs.found != 'true' }}
-        run: echo "::warning::No go.mod found in repository. Skipping Go build."
 
   container-scan:
     name: Docker Build + Trivy
@@ -161,30 +118,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect Dockerfile
-        id: dockerfile
-        run: |
-          set -euo pipefail
-          df="$(git ls-files '**/Dockerfile' | head -n 1 || true)"
-          if [[ -z "$df" ]]; then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "found=true" >> "$GITHUB_OUTPUT"
-          echo "path=$df" >> "$GITHUB_OUTPUT"
-          echo "context=$(dirname "$df")" >> "$GITHUB_OUTPUT"
-
       - name: Build image
-        if: ${{ steps.dockerfile.outputs.found == 'true' }}
         run: |
           set -euo pipefail
-          docker build \
-            -t linklian-queue:local \
-            -f "${{ steps.dockerfile.outputs.path }}" \
-            "${{ steps.dockerfile.outputs.context }}"
+          docker build -t linklian-queue:local -f worker/Dockerfile worker
 
       - name: Trivy scan (SARIF)
-        if: ${{ steps.dockerfile.outputs.found == 'true' }}
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -203,7 +142,3 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy.sarif
-
-      - name: No Dockerfile found
-        if: ${{ steps.dockerfile.outputs.found != 'true' }}
-        run: echo "::warning::No Dockerfile found in repository. Skipping Docker build + Trivy."
