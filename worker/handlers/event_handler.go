@@ -33,11 +33,11 @@ func (h *EventHandler) ProcessEvent(event models.SocketEvent) error {
 		fileList := utils.GetStringArray(event.Payload, "file_url")
 
 		err := utils.EmitToSocket("CHAT_DELIVER", map[string]interface{}{
-			"chat_id":   chatId,
-			"sender_id": senderId,
-			"content":   content,
-			"reply_id":  replyId,
-			"file_url":  fileList,
+			"chat_id":    chatId,
+			"sender_id":  senderId,
+			"content":    content,
+			"reply_id":   replyId,
+			"file_url":   fileList,
 			"created_at": event.Payload["created_at"],
 		})
 

@@ -8,7 +8,7 @@ import (
 
 func EmitToSocket(eventType string, payload map[string]interface{}) error {
 	conn, _, err := websocket.DefaultDialer.Dial(
-		os.Getenv("SOCKET_SERVER_URL") + "/ws/internal",
+		os.Getenv("SOCKET_SERVER_URL")+"/ws/internal",
 		nil,
 	)
 	if err != nil {

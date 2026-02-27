@@ -1,7 +1,25 @@
-# version: '3.8'
+version: '3.8'
 
 services:
-  # 1. RabbitMQ Service (เหมือนเดิม)
+  # 1. PostgreSQL Service for testing
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_test
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-postgres}
+      POSTGRES_DB: ${PG_DATABASE:-linkian_queue}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - linklian-net
+
+  # 2. RabbitMQ Service
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq_broker
@@ -9,8 +27,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
     healthcheck:
       test: ["CMD", "rabbitmqctl", "status"]
       interval: 30s
@@ -19,28 +37,30 @@ services:
     networks:
       - linklian-net
 
-  # 2. Go Worker Service (แก้ environment ให้ชี้ไป Azure)
+  # 3. Go Worker Service
   worker:
-    build: ./worker
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
     container_name: go_queue_worker
     restart: always
     depends_on:
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
-      - PG_HOST=${PG_HOST}
-      - PG_PORT=${PG_PORT}
-      - PG_USER=${PG_USER}
-      - PG_PASSWORD=${PG_PASSWORD}
-      - PG_DATABASE=${PG_DATABASE}
-      # - PG_SSLMODE=${PG_SSLMODE}
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/
-
+      - PG_HOST=${PG_HOST:-postgres}
+      - PG_PORT=${PG_PORT:-5432}
+      - PG_USER=${PG_USER:-postgres}
+      - PG_PASSWORD=${PG_PASSWORD:-postgres}
+      - PG_DATABASE=${PG_DATABASE:-linkian_queue}
+      - PG_SSLMODE=${PG_SSLMODE:-disable}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/
       - SOCKET_SERVER_URL=${SOCKET_SERVER_URL}
     networks:
       - linklian-net
 
-
 networks:
   linklian-net:
-    external: true
+    driver: bridge
