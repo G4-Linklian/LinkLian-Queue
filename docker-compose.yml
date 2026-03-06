@@ -20,8 +20,10 @@ services:
 
   # 2. Go Worker Service (แก้ environment ให้ชี้ไป Azure)
   worker:
-    build: ./worker
-    container_name: go_queue_worker
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: queue_worker
     restart: always
     depends_on:
       rabbitmq:
