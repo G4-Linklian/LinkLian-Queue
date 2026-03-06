@@ -1,4 +1,4 @@
-# version: '3.8'
+version: '3.8'
 
 services:
   rabbitmq:
@@ -8,8 +8,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
     healthcheck:
       test: ["CMD", "rabbitmqctl", "status"]
       interval: 30s
@@ -18,12 +18,16 @@ services:
     networks:
       - linklian-net
 
-  # 2. Go Worker Service (แก้ environment ให้ชี้ไป Azure)
+  # 3. Go Worker Service
   worker:
-    build: ./worker
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
     container_name: go_queue_worker
     restart: always
     depends_on:
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
@@ -35,7 +39,6 @@ services:
     networks:
       - linklian-net
 
-
 networks:
   linklian-net:
-    external: true
+    driver: bridge
