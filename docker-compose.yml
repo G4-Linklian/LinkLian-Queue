@@ -21,13 +21,11 @@ services:
   # 3. Go Worker Service
   worker:
     build:
-      context: .
-      dockerfile: worker/Dockerfile
-    container_name: go_queue_worker
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: queue_worker
     restart: always
     depends_on:
-      postgres:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
