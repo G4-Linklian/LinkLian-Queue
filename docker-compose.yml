@@ -1,25 +1,6 @@
 version: '3.8'
 
 services:
-  # 1. PostgreSQL Service for testing
-  postgres:
-    image: postgres:15-alpine
-    container_name: postgres_test
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: ${PG_USER:-postgres}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-postgres}
-      POSTGRES_DB: ${PG_DATABASE:-linkian_queue}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - linklian-net
-
-  # 2. RabbitMQ Service
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq_broker
@@ -50,14 +31,11 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      - PG_HOST=${PG_HOST:-postgres}
-      - PG_PORT=${PG_PORT:-5432}
-      - PG_USER=${PG_USER:-postgres}
-      - PG_PASSWORD=${PG_PASSWORD:-postgres}
-      - PG_DATABASE=${PG_DATABASE:-linkian_queue}
-      - PG_SSLMODE=${PG_SSLMODE:-disable}
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/
+      # - PG_SSLMODE=${PG_SSLMODE}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/
       - SOCKET_SERVER_URL=${SOCKET_SERVER_URL}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - linklian-net
 
