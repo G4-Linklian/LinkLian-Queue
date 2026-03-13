@@ -39,4 +39,5 @@ services:
 
 networks:
   linklian-net:
+    external: true
     driver: bridge
