@@ -17,6 +17,7 @@ const exchangeName = "linklian_events"
 // queueBindings กำหนด queue และ routing key pattern ที่ bind กับ exchange
 var queueBindings = map[string]string{
 	"chat_events":         "chat.*",
+	"qa_events":           "qa_live.#",
 	"notification_events": "notification.*",
 	"user_events":         "user.*",
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	chatdeliver "worker/event/chat_deliver"
+	qadeliver "worker/event/qa_deliver"
 	"worker/models"
 	"worker/utils/logger"
 )
@@ -21,6 +22,18 @@ func (h *EventHandler) ProcessEvent(event models.SocketEvent) error {
 	case "CHAT_DELIVER":
 		logger.Log("Found CHAT_DELIVER case", "EventHandler")
 		return chatdeliver.Handle(event)
+
+	case "QA_LIVE_STARTED", "QA_LIVE_ENDED":
+		return qadeliver.HandleLiveRoom(event)
+
+	case "FILE_CHANGED":
+		return qadeliver.HandleFile(event)
+
+	case "QA_NEW_QUESTION", "QA_QUESTION_UPDATED":
+		return qadeliver.HandleQuestion(event)
+
+	case "QA_UPVOTED":
+		return qadeliver.HandleVote(event)
 
 	// case "NOTIFY_ALERT":
 	// 	logger.Log("State: Processing NOTIFY_ALERT", "EventHandler")
