@@ -4,6 +4,7 @@ import (
 	"fmt"
 	chatdeliver "worker/event/chat_deliver"
 	"worker/event/community"
+	"worker/event/qna"
 	socialfeed "worker/event/social_feed"
 	"worker/models"
 	"worker/utils/logger"
@@ -23,6 +24,8 @@ var notificationHandlers = map[string]HandlerFunc{
 	"feed-post":      socialfeed.Handle,
 	"community-post": community.Handle,
 	"community":      community.Handle,
+	"qna-live":       qna.Handle,
+	"qna-question":   qna.Handle,
 }
 
 // eventHandlers route event ตาม type หลัก
