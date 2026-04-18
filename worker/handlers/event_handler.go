@@ -21,11 +21,13 @@ func NewEventHandler() *EventHandler {
 // notificationHandlers route NOTIFICATION event ตาม ref_type
 // เพิ่ม ref_type ใหม่ได้โดยเพิ่ม entry เดียว ไม่ต้องแตะ switch
 var notificationHandlers = map[string]HandlerFunc{
-	"feed-post":      socialfeed.Handle,
-	"community-post": community.Handle,
-	"community":      community.Handle,
-	"qna-live":       qna.Handle,
-	"qna-question":   qna.Handle,
+	"feed-post":         socialfeed.Handle,
+	"feed-comment":      socialfeed.Handle,
+	"community-post":    community.Handle,
+	"community-comment": community.Handle,
+	"community":         community.Handle,
+	"qna-live":          qna.Handle,
+	"qna-question":      qna.Handle,
 }
 
 // eventHandlers route event ตาม type หลัก

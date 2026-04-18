@@ -16,12 +16,15 @@ func Handle(event models.SocketEvent) error {
 	fileList := utils.GetStringArray(event.Payload, "file_url")
 
 	err := utils.EmitToSocket("CHAT_DELIVER", map[string]interface{}{
-		"chat_id":    chatId,
-		"sender_id":  senderId,
-		"content":    content,
-		"reply_id":   replyId,
-		"file_url":   fileList,
-		"created_at": event.Payload["created_at"],
+		"chat_id":         chatId,
+		"sender_id":       senderId,
+		"sender_name":     event.Payload["sender_name"],
+		"receive_user_id": event.Payload["receive_user_id"],
+		"notification_id": event.Payload["notification_id"],
+		"content":         content,
+		"reply_id":        replyId,
+		"file_url":        fileList,
+		"created_at":      event.Payload["created_at"],
 	}, "/ws/chat")
 	if err != nil {
 		logger.Error("Emit socket error", "ChatDeliver", map[string]interface{}{"error": err})
