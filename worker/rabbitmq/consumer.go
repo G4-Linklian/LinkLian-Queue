@@ -12,13 +12,13 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// exchangeName ต้องตรงกับ RABBITMQ_EXCHANGE ใน LinkLian-Core/src/worker/worker.constants.ts
 const exchangeName = "linklian_events"
 
 // queueBindings กำหนด queue และ routing key pattern ที่ bind กับ exchange
-// หมายเหตุ: notification_events และ chat_events ถูกจัดการโดย LinkLian-Socket โดยตรง
-// Queue service นี้จะไม่ bind queue เหล่านั้นเพื่อป้องกัน competing consumers
-var queueBindings = map[string]string{}
+var queueBindings = map[string]string{
+	"chat_events":         "chat.*",
+	"user_events":         "user.*",
+}
 
 func InitConsumer(handler *handlers.EventHandler) {
 	amqpURL := os.Getenv("RABBITMQ_URL")
