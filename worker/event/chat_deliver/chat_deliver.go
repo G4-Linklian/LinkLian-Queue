@@ -11,6 +11,7 @@ func Handle(event models.SocketEvent) error {
 
 	chatId := event.Payload["chat_id"]
 	senderId := event.Payload["sender_id"]
+	receiverId := event.Payload["receiver_id"]
 	replyId := event.Payload["reply_id"]
 	content, _ := event.Payload["content"].(string)
 	fileList := utils.GetStringArray(event.Payload, "file_url")
@@ -18,6 +19,7 @@ func Handle(event models.SocketEvent) error {
 	err := utils.EmitToSocket("CHAT_DELIVER", map[string]interface{}{
 		"chat_id":    chatId,
 		"sender_id":  senderId,
+		"receiver_id": receiverId,
 		"content":    content,
 		"reply_id":   replyId,
 		"file_url":   fileList,
