@@ -1,7 +1,6 @@
-# version: '3.8'
+version: '3.8'
 
 services:
-  # 1. RabbitMQ Service (เหมือนเดิม)
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq_broker
@@ -9,8 +8,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
     healthcheck:
       test: ["CMD", "rabbitmqctl", "status"]
       interval: 30s
@@ -19,28 +18,26 @@ services:
     networks:
       - linklian-net
 
-  # 2. Go Worker Service (แก้ environment ให้ชี้ไป Azure)
+  # 3. Go Worker Service
   worker:
-    build: ./worker
-    container_name: go_queue_worker
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: queue_worker
     restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
-      - PG_HOST=${PG_HOST}
-      - PG_PORT=${PG_PORT}
-      - PG_USER=${PG_USER}
-      - PG_PASSWORD=${PG_PASSWORD}
-      - PG_DATABASE=${PG_DATABASE}
       # - PG_SSLMODE=${PG_SSLMODE}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/
-
       - SOCKET_SERVER_URL=${SOCKET_SERVER_URL}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - linklian-net
-
 
 networks:
   linklian-net:
     external: true
+    driver: bridge

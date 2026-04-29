@@ -1,61 +1,47 @@
 package handlers
 
 import (
-	"database/sql"
-	// "fmt"
-	// "github.com/gorilla/websocket"
-	"log"
+	chatdeliver "worker/event/chat_deliver"
+	qadeliver "worker/event/qa_deliver"
 	"worker/models"
-	"worker/utils"
-	// "github.com/lib/pq"
+	"worker/utils/logger"
 )
 
 type EventHandler struct {
-	DB *sql.DB
+	
 }
 
-func NewEventHandler(db *sql.DB) *EventHandler {
-	return &EventHandler{DB: db}
+func NewEventHandler() *EventHandler {
+	return &EventHandler{}
 }
 
 func (h *EventHandler) ProcessEvent(event models.SocketEvent) error {
-	utils.LogInfof("Processing Event Type: %s", event.Type)
+	logger.Log("Processing Event Type", "EventHandler", map[string]interface{}{"event_type": event.Type})
 
 	switch event.Type {
 	case "CHAT_DELIVER":
+		logger.Log("Found CHAT_DELIVER case", "EventHandler")
+		return chatdeliver.Handle(event)
 
-		utils.LogInfo("Worker: Emitting CHAT_DELIVER to socket server")
+	case "QA_LIVE_STARTED", "QA_LIVE_ENDED":
+		return qadeliver.HandleLiveRoom(event)
 
-		chatId := event.Payload["chat_id"]
-		senderId := event.Payload["sender_id"]
-		replyId := event.Payload["reply_id"]
-		content, _ := event.Payload["content"].(string)
-		fileList := utils.GetStringArray(event.Payload, "file_url")
+	case "FILE_CHANGED":
+		return qadeliver.HandleFile(event)
 
-		err := utils.EmitToSocket("CHAT_DELIVER", map[string]interface{}{
-			"chat_id":   chatId,
-			"sender_id": senderId,
-			"content":   content,
-			"reply_id":  replyId,
-			"file_url":  fileList,
-			"created_at": event.Payload["created_at"],
-		})
+	case "QA_NEW_QUESTION", "QA_QUESTION_UPDATED":
+		return qadeliver.HandleQuestion(event)
 
-		if err != nil {
-			utils.LogErrorf("Emit socket error: %v", err)
-			return err
-		}
+	case "QA_UPVOTED":
+		return qadeliver.HandleVote(event)
 
-		utils.LogInfo("State: CHAT_SEND Processed Successfully")
-		return nil
-
-	case "NOTIFY_ALERT":
-		utils.LogInfo("State: Processing NOTIFY_ALERT")
-		log.Println(event.Payload)
-		utils.LogInfo("Inserted system_alert")
+	// case "NOTIFY_ALERT":
+	// 	logger.Log("State: Processing NOTIFY_ALERT", "EventHandler")
+	// 	log.Println(event.Payload)
+	// 	logger.Log("State: Inserted system_alert", "EventHandler")
 
 	default:
-		utils.LogErrorf("State: Unknown Event Type: %s", event.Type)
+		logger.Error("State: Unknown Event Type", "EventHandler", map[string]interface{}{"event_type": event.Type})
 	}
 	return nil
 }
