@@ -6,7 +6,7 @@ import (
 	"worker/utils/logger"
 )
 
-func Handle(event models.SocketEvent) error {
+func HandleChat(event models.SocketEvent) error {
 	logger.Log("Worker: Emitting CHAT_DELIVER to socket server", "ChatDeliver")
 
 	chatId := event.Payload["chat_id"]

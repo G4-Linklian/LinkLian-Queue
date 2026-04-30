@@ -3,6 +3,7 @@ package handlers
 import (
 	chatdeliver "worker/event/chat_deliver"
 	qadeliver "worker/event/qa_deliver"
+	notification "worker/event/notification"
 	"worker/models"
 	"worker/utils/logger"
 )
@@ -21,7 +22,7 @@ func (h *EventHandler) ProcessEvent(event models.SocketEvent) error {
 	switch event.Type {
 	case "CHAT_DELIVER":
 		logger.Log("Found CHAT_DELIVER case", "EventHandler")
-		return chatdeliver.Handle(event)
+		return chatdeliver.HandleChat(event)
 
 	case "QA_LIVE_STARTED", "QA_LIVE_ENDED":
 		return qadeliver.HandleLiveRoom(event)
@@ -35,10 +36,9 @@ func (h *EventHandler) ProcessEvent(event models.SocketEvent) error {
 	case "QA_UPVOTED":
 		return qadeliver.HandleVote(event)
 
-	// case "NOTIFY_ALERT":
-	// 	logger.Log("State: Processing NOTIFY_ALERT", "EventHandler")
-	// 	log.Println(event.Payload)
-	// 	logger.Log("State: Inserted system_alert", "EventHandler")
+	case "SEND_NOTIFICATION":
+		logger.Log("State: Processing SEND_NOTIFICATION", "EventHandler")
+		return notification.HandleNotification(event)
 
 	default:
 		logger.Error("State: Unknown Event Type", "EventHandler", map[string]interface{}{"event_type": event.Type})
